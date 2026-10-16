@@ -1,8 +1,7 @@
 /* ============================================================
    ANIDOST API — Cloudflare Worker
-   Storage: KV namespace (binding: ANIME_KV)
+   Storage: KV namespace (binding: anidost_kv)
    Auth:    X-API-Key header vs env.API_KEY
-   Data:    GitHub-এ কিছু নেই — সব KV-তে
    ============================================================ */
 
 const CORS = {
@@ -43,21 +42,17 @@ export default {
     }
 
     try {
-      /* ─────── GET /health ─────── */
       if (request.method === "GET" && path === "/health") {
         return json({
-          ok: true,
-          service: "anidost-api",
+          ok: true, service: "anidost-api",
           time: new Date().toISOString(),
-          storage: "KV",
-          kvBound: !!env.ANIME_KV,
+          storage: "KV", kvBound: !!env.anidost_kv,
           authConfigured: !!env.API_KEY
         });
       }
 
-      /* ─────── GET /list ─────── */
       if (request.method === "GET" && path === "/list") {
-        const list = await env.ANIME_KV.list({ prefix: "anime_" });
+        const list = await env.anidost_kv.list({ prefix: "anime_" });
         const files = (list.keys || [])
           .filter(k => /^anime_\d+\.js$/.test(k.name))
           .map(k => ({ name: k.name }))
@@ -69,16 +64,14 @@ export default {
         return json({ files });
       }
 
-      /* ─────── GET /file/:name ─────── */
       if (request.method === "GET" && path.startsWith("/file/")) {
         const name = decodeURIComponent(path.slice(6));
         if (!isValidName(name)) return err("Invalid file name", 400);
-        const content = await env.ANIME_KV.get(name, { type: "text" });
+        const content = await env.anidost_kv.get(name, { type: "text" });
         if (content === null) return err("File not found", 404);
         return json({ name, content, size: content.length });
       }
 
-      /* ─────── PUT /file/:name ─────── */
       if (request.method === "PUT" && path.startsWith("/file/")) {
         const name = decodeURIComponent(path.slice(6));
         if (!isValidName(name)) return err("Invalid file name", 400);
@@ -94,7 +87,7 @@ export default {
           return err("Content too large (max 25 MB per file)", 413);
         }
 
-        await env.ANIME_KV.put(name, body.content, {
+        await env.anidost_kv.put(name, body.content, {
           metadata: { updated: new Date().toISOString() }
         });
 
@@ -105,17 +98,15 @@ export default {
         });
       }
 
-      /* ─────── DELETE /file/:name ─────── */
       if (request.method === "DELETE" && path.startsWith("/file/")) {
         const name = decodeURIComponent(path.slice(6));
         if (!isValidName(name)) return err("Invalid file name", 400);
-        await env.ANIME_KV.delete(name);
+        await env.anidost_kv.delete(name);
         return json({ ok: true, deleted: name });
       }
 
-      /* ─────── GET /anime_link.js ─────── */
       if (request.method === "GET" && path === "/anime_link.js") {
-        const list = await env.ANIME_KV.list({ prefix: "anime_" });
+        const list = await env.anidost_kv.list({ prefix: "anime_" });
         const files = (list.keys || [])
           .filter(k => /^anime_\d+\.js$/.test(k.name))
           .map(k => k.name)
@@ -145,12 +136,10 @@ export default {
         });
       }
 
-      /* ─────── GET /anime_N.js (public site-এর জন্য) ─────── */
       if (request.method === "GET" && /^\/anime_\d+\.js$/.test(path)) {
         const name = path.slice(1);
-        const content = await env.ANIME_KV.get(name, { type: "text" });
+        const content = await env.anidost_kv.get(name, { type: "text" });
         if (content === null) return err("Not found", 404);
-
         return new Response(content, {
           headers: {
             "Content-Type": "application/javascript; charset=utf-8",
